@@ -107,16 +107,19 @@ Course.getCourse = function(courses, courseId, result) {
             console.log(resultObj.statusMsg + ": " + JSON.stringify(err));
             resultObj.statusObj = err;
             result(resultObj, null);
-        } else {
+        } else if (res.length == 1) { //course found
            resultObj.success = true;
            resultObj.statusMsg = "Course data successfully retrieved.";
            resultObj.data = res[0];
            result(resultObj,null);
+        } else { //course not found
+            resultObj.statusMsg = "Course could not be found in database";
+            result(resultObj,null);
         }
     });
 };
 
-Course.updateCourseHole = function(courses, courseId, holeData, result) {
+Course.updateCourse = function(courses, courseId, holeData, result) {
     var hd, hdOk, numHoles, resultObj;
     resultObj = {success: false, statusMsg: "", statusObj: null};
     //First, ensure that courseId exists in DB. If not, can't add holes!
@@ -141,7 +144,6 @@ Course.updateCourseHole = function(courses, courseId, holeData, result) {
                 console.log(resultObj.statusMsg);
                 result(resultObj,null);
             } else {
-                console.log("hdOk: " + JSON.stringify(hdOk));
                 //If here, we can proceed with data add or update...
                 courses.find({_id: new ObjectId(courseId), holes: {$elemMatch: {holeNum: hdOk.holeNum}}})
                   .toArray(function(err2,res2) {

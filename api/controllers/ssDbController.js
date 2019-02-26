@@ -39,12 +39,12 @@ exports.getCourse = function(req, res) {
 /* updateCourseHole -- Process API request to update hole data.
    We do this by calling on the corresponding updateCourseHole method in the model.
 */
-exports.updateCourseHole = function(req, res) {
-    Course.updateCourseHole(req.app.locals.courses, req.params.courseId, new Hole(req.body), function(err,course) {
+exports.updateCourse = function(req, res) {
+    Course.updateCourse(req.app.locals.courses, req.params.courseId, new Hole(req.body), function(err,result) {
       if (err) {
           res.send(err);
       } else {
-          res.json(course)
+          res.json(result);
       }
     });
 };
