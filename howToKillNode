@@ -1,0 +1,6 @@
+Run cmd.exe as 'Administrator'/ 
+
+Then:
+
+C:\Windows\System32>taskkill /F /IM node.exe
+SUCCESS: The process "node.exe" with PID 11008 has been terminated.
