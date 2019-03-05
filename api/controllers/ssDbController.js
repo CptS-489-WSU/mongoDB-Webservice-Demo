@@ -36,6 +36,19 @@ exports.getCourse = function(req, res) {
    });
 };
 
+/* getAllCourses -- Process API request to get data associated with all coruses in DB.
+   We do this by calling on the corresponding getCourse method in the model. 
+*/
+exports.getAllCourses = function(req, res) {
+  Course.getAllCourses(req.app.locals.courses,req.query.sortBy, function(err, result) {
+    if (err) {
+      res.send(err);
+    } else {
+      res.json(result);
+    }
+  });
+};
+
 /* updateCourseHole -- Process API request to update hole data.
    We do this by calling on the corresponding updateCourseHole method in the model.
 */

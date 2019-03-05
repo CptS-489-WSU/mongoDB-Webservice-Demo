@@ -74,7 +74,7 @@ Course.addCourse = function (courses, newCourse, result) {
             } else {
                 //3. Course isn't in DB -- Add it.
                 newCourse.totalStrPar = 0;
-                newCourse.totalTimepar = new Date(0,0,1,0,0,0,0);
+                newCourse.totalTimePar = new Date(0,0,1,0,0,0,0);
                 newCourse.totalGolfDist = 0;
                 newCourse.totalRunDist = 0;
                 newCourse.holes = []; //no holes added yet; create empty inner collection
@@ -119,11 +119,46 @@ Course.getCourse = function(courses, courseId, result) {
     });
 };
 
+/* getAllCourses -- Obtain the data associated with all courses in the db.
+   We sort the data by sortBy if this parameter is included; otherwise, the
+   default sort order is by SGS.
+*/
+Course.getAllCourses = function(courses,sortBy,result) {
+    console.log("sortBy: " + sortBy);
+    var resultObj = {success: false, statusMsg: "", statusObj: null};
+    var sortObj = {};
+    if (sortBy != undefined) {
+        sortObj[sortBy] = 1;
+    } else { //default
+        sortObj.name = 1;
+    }
+    courses.find().sort(sortObj).toArray(function (err, res) {
+        if(err) {
+            resultObj.statusMsg = "An error occurred when attempting to access course in database.";
+            console.log(resultObj.statusMsg + ": " + JSON.stringify(err));
+            resultObj.statusObj = err;
+            result(resultObj, null);
+        } else {
+            resultObj.success = true;
+            resultObj.statusMsg = "Data on " + res.length + " courses successfuly retrieved.";
+            resultObj.data = res; //array of courses
+            result(resultObj,null);
+        }
+    });
+};
+
+/* updateCourse -- Given hole data for a given course, update the course with the
+   hole data. This requires a "push" to a course document's internal holes document
+   in the case of new hole data, and a "set" in the case of updated hole data.
+   We return an error if the course could not be found in db. 
+*/
+
 Course.updateCourse = function(courses, courseId, holeData, result) {
-    var hd, hdOk, numHoles, resultObj;
+    var hd, hdOk, numHoles, resultObj, cId;
+    cId = new ObjectId(courseId); //we'll use this for searching for course.
     resultObj = {success: false, statusMsg: "", statusObj: null};
     //First, ensure that courseId exists in DB. If not, can't add holes!
-    courses.find({_id: new ObjectId(courseId)}).toArray(function(err, res) {
+    courses.find({_id: cId}).toArray(function(err, res) {
         if (err) { //Unexpected error in query
             resultObj.statusMsg = "Error when checking if course with id " + courseId + " exists in database.";
             resultObj.statusObj = err;
@@ -145,7 +180,7 @@ Course.updateCourse = function(courses, courseId, holeData, result) {
                 result(resultObj,null);
             } else {
                 //If here, we can proceed with data add or update...
-                courses.find({_id: new ObjectId(courseId), holes: {$elemMatch: {holeNum: hdOk.holeNum}}})
+                courses.find({_id: cId, holes: {$elemMatch: {holeNum: hdOk.holeNum}}})
                   .toArray(function(err2,res2) {
                   if (err2) {
                       resultObj.statusMsg = "Error when locating hole to update in course";
@@ -161,14 +196,15 @@ Course.updateCourse = function(courses, courseId, holeData, result) {
                             console.log(resultObj.statusMsg + ": " + err3);
                             resultObj.statusObj = err3;
                             result(resultObj,null);
-                        } else {
+                        } else { //success
                           resultObj.statusMsg = "Hole successfully added to course.";
+                          updateTotals(courses,cId);
                           resultObj.success = true;
                           result(resultObj,null);
                         }
                     });
                 } else { //Found course/hole combo; need to update
-                    courses.updateOne({_id: new ObjectId(courseId), holes: {$elemMatch: {holeNum: hdOk.holeNum}}},
+                    courses.updateOne({_id: cId, holes: {$elemMatch: {holeNum: hdOk.holeNum}}},
                          {$set: {
                             'holes.$.strPar' :  hdOk.strPar,
                             'holes.$.timePar': hdOk.timePar,
@@ -184,6 +220,7 @@ Course.updateCourse = function(courses, courseId, holeData, result) {
                                 result(resultObj,null);
                             } else {
                                 resultObj.statusMsg = "Hole successfully updated in course.";
+                                updateTotals(courses,cId);
                                 resultObj.success = true;
                                 result(resultObj,null);
                             }
@@ -207,13 +244,17 @@ function stringToDate(stringDur) {
       theDate.setSeconds(stringDur.getSeconds());
     } else { //string
       var durParts = stringDur.split(":");
-      theDate.setHours(durParts[0]);
-      theDate.setMinutes(durParts[1]);
-      if (durParts.length >= 3)
-        theDate.setSeconds(durParts[2]);
-      else
-        theDate.setSeconds(0);
+      console.log("durParts: " + JSON.stringify(durParts));
+      if (durParts.length == 3) {
+        theDate.setHours(Number(durParts[0]));
+        theDate.setMinutes(Number(durParts[1]));
+        theDate.setSeconds(Number(durParts[2]));
+      } else {
+        theDate.setMinutes(Number(durParts[0]));
+        theDate.setSeconds(Number(durParts[1]));
+      }
     }
+    console.log("stringToDate returned: " + theDate);
     return theDate;
   }
 
@@ -222,6 +263,7 @@ function stringToDate(stringDur) {
     null if the values cannot be converted or an object with values converted to proper types and formats
  */
  function checkHoleData(data, numHoles) {
+     var parts;
    if (isNaN(data.holeNum) || Number(data.holeNum) < 1 || Number(data.holeNum) > numHoles ||
        isNaN(data.strPar) || Number(data.strPar) < 2 || Number(data.strPar) > 6 || 
        !(typeof data.timePar == 'string') || 
@@ -230,12 +272,35 @@ function stringToDate(stringDur) {
        isNaN(data.runDist) || Number(data.runDist) < 1) { 
            return null; //invalid data exists!
        }
-       if (data.timePar.split(":").length == 2) { //Splits into two parts; need to add leading 0...
-          data.timePar = "0:" + data.timePar;
-       }
-       console.log("checkHoleData is returning: " + JSON.stringify(data));
        data.timePar = stringToDate(data.timePar);
+       console.log("checkHoleData is returning: " + JSON.stringify(data));
        return data;
   }
 
+  //updateTotals: Whenever we update or add hole data, we need to update the overall totals for the
+  //course. This function updates those totals, returning true if successful, false otherwise.
+  function updateTotals(courses, cId) {
+    var updateDoc = {_id: cId};
+    var updateObj = {totalStrPar: 0, totalTimePar: new Date(0,0,1,0,0,0,0), 
+                         totalGolfDist: 0, totalRunDist: 0};
+    courses.find(updateDoc).toArray(function(err, res) {
+        if (err) { //Unexpected error in query
+            console.log("Error when checking if course with id " + courseId + " exists in database." + ": " + JSON.stringify(err));
+        } else { // we can proceed
+            for (var i = 0; i < res[0].holes.length; ++i) {
+                updateObj.totalStrPar += Number(res[0].holes[i].strPar);
+                //To sum SG time duratins, we need to sum minutes and then sum seconds. JavaScript
+                //allegedly properly handles wrap-around cases.
+                updateObj.totalTimePar.setMinutes(updateObj.totalTimePar.getMinutes() + 
+                                                res[0].holes[i].timePar.getMinutes());
+                updateObj.totalTimePar.setSeconds(updateObj.totalTimePar.getSeconds() + 
+                                                res[0].holes[i].timePar.getSeconds());
+                updateObj.totalGolfDist += Number(res[0].holes[i].golfDist);
+                updateObj.totalRunDist += Number(res[0].holes[i].runDist);
+            }
+            //Now we can update the doc with the new totals...
+            courses.updateOne(updateDoc,{$set: updateObj});
+        }           
+    });
+}
 module.exports = {Course, Hole};

@@ -8,9 +8,10 @@ module.exports = function(app) {
 
     //routes
     app.route('/courses')
-    .post(sgCourse.addCourse); // API request 1: POST request to add a course
+    .post(sgCourse.addCourse) // API request: POST request to add a course
+    .get(sgCourse.getAllCourses); //API request: GET all courses
 
     app.route('/courses/:courseId')
-      .get(sgCourse.getCourse) //API rqeuest 2: GET request to get a course
-      .put(sgCourse.updateCourse); //API request 2: PUT request to update a course
+      .get(sgCourse.getCourse) //API request: GET request to get a course
+      .put(sgCourse.updateCourse); //API request: PUT request to update a course
 };
